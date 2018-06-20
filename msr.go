@@ -1,16 +1,17 @@
 package main
 
 import (
-	"math"
-	"fmt"
-	"os"
 	"bytes"
 	"encoding/binary"
-	"path/filepath"
+	"fmt"
 	"log"
+	"math"
+	"os"
+	"path/filepath"
 )
 
 type VoltagePlane int
+
 const (
 	cpuCorePlane  = 0
 	gpuPlane      = 1
@@ -18,7 +19,6 @@ const (
 	uncorePlane   = 3
 	analogioPlane = 4
 )
-
 
 // https://software.intel.com/sites/default/files/managed/22/0d/335592-sdm-vol-4.pdf
 //
@@ -29,12 +29,12 @@ const (
 // As best I can tell, the voltage values are just reverse-engineered from Intel's
 // tuning utilities.
 type MSROffset int64
+
 const (
 	underVoltOffset = 0x150
 	tempOffset      = 0x1a2 // b29:24 Temperature Target
 	powerLimit      = 0x610 // PKG RAPL Power Limit Control (R/W)
 )
-
 
 // Convenience function to be replaced by proper CLI command
 func doUndervolt() error {
@@ -64,9 +64,9 @@ func doUndervolt() error {
 // TemperatureTarget is a struct corresponding to the TEMPERATURE_TARGET MSR for
 // an individual CPU
 type TemperatureTarget struct {
-	cpu		int   // CPU number
-	target  int64 // default thermal throttling activation temperature in degrees C
-	offset  int64 // offset from the default in degrees C at which to start throttling
+	cpu    int   // CPU number
+	target int64 // default thermal throttling activation temperature in degrees C
+	offset int64 // offset from the default in degrees C at which to start throttling
 }
 
 // readTempTarget returns a TemperatureTarget struct for the cpu given in cpu
@@ -145,7 +145,6 @@ func calcUndervoltValue(plane VoltagePlane, offsetMv int) uint64 {
 	offsetValue := 0xffe00000 & ((offset & 0xfff) << 21)
 	return packOffset(offsetValue, plane)
 }
-
 
 func ReadMSRIntValue(msr_file string, MSRRegAddr int64) (int64, error) {
 	fmt.Printf("readmsr: %#x\n", MSRRegAddr)
@@ -226,4 +225,3 @@ func GetMsrFiles(cpu int) ([]string, error) {
 	}
 	return msrFiles, nil
 }
-
