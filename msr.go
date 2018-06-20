@@ -37,25 +37,38 @@ const (
 )
 
 // Convenience function to be replaced by proper CLI command
-func doUndervolt() error {
-	err := setUndervolt(cpuCorePlane, -115, -1)
+func doAllUndervolt() error {
+
+	MSRFiles, err := GetMsrFiles(-1)
 	if err != nil {
 		return err
 	}
 
-	err = setUndervolt(cachePlane, -115, -1)
-	if err != nil {
-		return err
-	}
+	// TODO(davidr) shame on you. fix this
+	for cpu, _ := range MSRFiles {
+		err := setVoltage(cpuCorePlane, -115, cpu)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
 
-	err = setUndervolt(uncorePlane, -115, -1)
-	if err != nil {
-		return err
-	}
+		err = setVoltage(cachePlane, -115, cpu)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
 
-	err = setUndervolt(gpuPlane, -50, -1)
-	if err != nil {
-		return err
+		err = setVoltage(uncorePlane, -115, cpu)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
+
+		err = setVoltage(gpuPlane, -50, cpu)
+		if err != nil {
+			fmt.Println(err)
+			return err
+		}
 	}
 
 	return nil
@@ -67,6 +80,36 @@ type TemperatureTarget struct {
 	cpu    int   // CPU number
 	target int64 // default thermal throttling activation temperature in degrees C
 	offset int64 // offset from the default in degrees C at which to start throttling
+}
+
+// setThrottleTemp sets the throttle temperature for the CPU to temp by way of an offset
+// from TemperatureTarget.target (e.g. if t.target == 100, then setThrottleTemp(90)
+// will set t.offset to 10)
+func (t *TemperatureTarget) setThrottleTemp(throttleTemp int64) error {
+	// I think it's unlikely we'd ever want to set the offset higher than the default
+	if throttleTemp > t.target {
+		return fmt.Errorf("CPU throttling temperature cannot be higher than %d", t.target)
+	}
+
+	newOffset := t.target - throttleTemp
+	if newOffset == t.offset {
+		return nil
+	}
+
+	// we have a new value, now set it
+	MSRFiles, err := GetMsrFiles(t.cpu)
+	if err != nil {
+		return fmt.Errorf("could not set temperature target for CPU %d: %s", t.cpu, err)
+	}
+
+	err = WriteMSRIntValue(MSRFiles[0], tempOffset, uint64(newOffset<<24))
+	if err != nil {
+		return fmt.Errorf("could not set new offset for CPU %d: %s", t.cpu, err)
+	} else {
+		t.offset = newOffset
+	}
+
+	return nil
 }
 
 // readTempTarget returns a TemperatureTarget struct for the cpu given in cpu
@@ -98,26 +141,42 @@ func readTempTarget(cpu int) (TemperatureTarget, error) {
 
 	tempTarget.offset = (buf & tempOffsetMask) >> 24
 	tempTarget.target = (buf & tempTargetMask) >> 16
-
 	return tempTarget, nil
 }
 
-// setUndervolt sets the setPlane plane on cpu cpu to mVolts mV. If cpu is -1,
-// setUndervolt sets the value on all CPUs in the system.
-func setUndervolt(setPlane VoltagePlane, mVolts int, cpu int) error {
+func isValidCPU(cpu int) bool {
+
+	// CPU must be a nonnegative integer
+	if cpu < 0 {
+		return false
+	}
+
+	// Does this CPU have a directory under /dev/cpu?
+	cpuDir := fmt.Sprintf("/dev/cpu/%d", cpu)
+	if _, err := os.Stat(cpuDir); os.IsNotExist(err) {
+		return false
+	}
+
+	return true
+}
+
+// setVoltage sets the setPlane plane on cpu cpu to mVolts mV
+func setVoltage(setPlane VoltagePlane, mVolts int, cpu int) error {
+	if !isValidCPU(cpu) {
+		return fmt.Errorf("msr: invalid CPU number %d", cpu)
+	}
+
 	MSRFiles, err := GetMsrFiles(cpu)
 	if err != nil {
-		return err
+		return fmt.Errorf("msr: failed to set voltage on cpu %d: %s", cpu, err)
 	}
 
 	OffsetValue := calcUndervoltValue(setPlane, mVolts)
 	fmt.Printf("OffsetValue: %#x\n", OffsetValue)
-	for _, MSRFile := range MSRFiles {
-		err := WriteMSRIntValue(MSRFile, underVoltOffset, OffsetValue)
-		if err != nil {
-			fmt.Println("WriteMSRIntValue returned error: ", err)
-			return err
-		}
+	err = WriteMSRIntValue(MSRFiles[0], underVoltOffset, OffsetValue)
+	if err != nil {
+		fmt.Println("WriteMSRIntValue returned error: ", err)
+		return err
 	}
 
 	return nil
@@ -126,12 +185,13 @@ func setUndervolt(setPlane VoltagePlane, mVolts int, cpu int) error {
 func packOffset(offset uint32, plane VoltagePlane) uint64 {
 	// I've deconstructed this calculation a little bit so I can remember how this magic
 	// int64 was created. This is... not intuitive to me.
+	planeBits := uint64(plane) << 40
 
 	// I don't actually know what this bit does, but it seems to be needed
 	unknownBit := uint64(1 << 36)
 
+	// Set to 1 if we intend to write the value
 	writeBit := uint64(1 << 32)
-	planeBits := uint64(plane) << 40
 
 	return (1 << 63) | planeBits | writeBit | unknownBit | uint64(offset)
 }
@@ -205,7 +265,8 @@ func WriteMSRIntValue(msr_file string, MSRRegAddr int64, value uint64) error {
 }
 
 // Return a slice of strings of all of the model specific register (msr) files associated
-// with the CPUs on the system. In case of error, returns an empty slice.
+// with the CPUs on the system. If -1 is given for cpu, GetMsrFiles returns a slice of all
+// CPUs' MSR files on the system In case of error, returns an empty slice.
 func GetMsrFiles(cpu int) ([]string, error) {
 	var msrFiles []string
 	var err error
@@ -213,6 +274,10 @@ func GetMsrFiles(cpu int) ([]string, error) {
 	if cpu == -1 {
 		msrFiles, err = filepath.Glob("/dev/cpu/*/msr")
 	} else {
+		if !isValidCPU(cpu) {
+			return msrFiles, fmt.Errorf("msr: invalid CPU number %d", cpu)
+		}
+
 		cpumsrFile := fmt.Sprintf("/dev/cpu/%d/msr", cpu)
 		_, err = os.Stat(cpumsrFile)
 		msrFiles = append(msrFiles, cpumsrFile)
