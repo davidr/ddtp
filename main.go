@@ -13,7 +13,8 @@ func main() {
 	// TODO(davidr) - unless dry run is enabled, this should cause the program to fail
 	fmt.Printf("EUID == 0: %t\n", isRoot())
 
-	doUndervolt()
+	// doUndervolt()
+	fmt.Println(readTempTarget(0))
 
 }
 
