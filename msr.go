@@ -8,6 +8,8 @@ import (
 	"math"
 	"os"
 	"path/filepath"
+	"path"
+	"strconv"
 )
 
 type VoltagePlane int
@@ -144,6 +146,32 @@ func readTempTarget(cpu int) (TemperatureTarget, error) {
 	return tempTarget, nil
 }
 
+// GetAllCPUs returns a list of integers corresponding to all CPUs on the system (e.g. on
+// a 4-core system, GetAllCPUs will return [0, 1, 2, 3]. This listing is obtained by globbing
+// /dev/cpu/[0-9]*
+func GetAllCPUs() ([]int, error) {
+	var cpus []int
+
+	cpuDirs, err := filepath.Glob("/dev/cpu/[0-9]*")
+	if err != nil {
+		return cpus, err
+	}
+
+	for _, cpuDir := range cpuDirs {
+		cpuDirBase := path.Base(cpuDir)
+
+		cpuId, _ := strconv.Atoi(cpuDirBase)
+		cpus = append(cpus, cpuId)
+	}
+
+	// Just a sanity check to make sure we found *something*
+	if len(cpus) == 0 {
+		return cpus, fmt.Errorf("found no CPUs")
+	}
+
+	return cpus, nil
+}
+
 func isValidCPU(cpu int) bool {
 
 	// CPU must be a nonnegative integer
@@ -272,21 +300,37 @@ func GetMsrFiles(cpu int) ([]string, error) {
 	var err error
 
 	if cpu == -1 {
-		msrFiles, err = filepath.Glob("/dev/cpu/*/msr")
+		allCpus, err := GetAllCPUs()
+		if err != nil {
+			return msrFiles, err
+		}
+
+		for _, cpu := range allCpus {
+			msrFile, err := GetMsrFiles(cpu)
+			if err != nil {
+				return msrFiles, err
+			}
+
+			msrFiles = append(msrFiles, msrFile[0])
+		}
+		return msrFiles, nil
+
 	} else {
 		if !isValidCPU(cpu) {
 			return msrFiles, fmt.Errorf("msr: invalid CPU number %d", cpu)
 		}
 
 		cpumsrFile := fmt.Sprintf("/dev/cpu/%d/msr", cpu)
-		_, err = os.Stat(cpumsrFile)
+		// TODO(davidr) incorrect checking for whether stat succeeds
+		if _, err := os.Stat(cpumsrFile); os.IsNotExist(err) {
+			return msrFiles, err
+		}
 		msrFiles = append(msrFiles, cpumsrFile)
 	}
 
 	if err != nil {
 		fmt.Println("Error getting MSR file(s): ", err)
-		var emptylist []string
-		return emptylist, err
+		return msrFiles, err
 	}
 	return msrFiles, nil
 }
