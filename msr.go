@@ -77,7 +77,6 @@ func doAllUndervolt() error {
 	return nil
 }
 
-
 // RAPLPowerLimit is a struct corresponding to the PKG RAPL Power Limit Control
 // MSR for a CPU
 type RAPLPowerLimit struct {
@@ -92,7 +91,7 @@ type RAPLPowerLimit struct {
 func readRAPLPowerLimit(cpu int) (RAPLPowerLimit, error) {
 	// This calculation is a bit odd. Register 0x606 has the information that defines
 	// the units that we use in register 0x610, so we need to parse that first.
-	rpl := 	RAPLPowerLimit{cpu: cpu}
+	rpl := RAPLPowerLimit{cpu: cpu}
 
 	MSRFile, err := GetMsrFile(cpu)
 	if err != nil {
@@ -112,10 +111,10 @@ func readRAPLPowerLimit(cpu int) (RAPLPowerLimit, error) {
 		return rpl, err
 	}
 
-	rpl.powerLimit = float64(rplBitfield & 0x7fff) * powerUnits      // bits 14:0
-	rpl.timeWindow = float64((rplBitfield >> 17) & 0x7f) * timeUnits // bits 23:17
-	rpl.enabled = (rplBitfield >> 15) & 0x1 == 1					 // bit 15
-	rpl.clamping = (rplBitfield >> 16) & 0x1 == 1                    // bit 16
+	rpl.powerLimit = float64(rplBitfield&0x7fff) * powerUnits    // bits 14:0
+	rpl.timeWindow = float64((rplBitfield>>17)&0x7f) * timeUnits // bits 23:17
+	rpl.enabled = (rplBitfield>>15)&0x1 == 1                     // bit 15
+	rpl.clamping = (rplBitfield>>16)&0x1 == 1                    // bit 16
 
 	return rpl, nil
 }
@@ -133,7 +132,6 @@ func getRAPLPowerUnits(rplUnitBitfield int64) (float64, float64) {
 
 	return powerUnits, timeUnits
 }
-
 
 // TemperatureTarget is a struct corresponding to the TEMPERATURE_TARGET MSR for
 // an individual CPU
