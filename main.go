@@ -13,7 +13,10 @@ func main() {
 	fmt.Printf("EUID == 0: %t\n", isRoot())
 
 	// doAllUndervolt()
-	fmt.Println(readTempTarget(0))
+	// fmt.Println(readTempTarget(0))
+	cpus, err := GetAllMsrFiles()
+
+	fmt.Println("woot: ", cpus, err)
 
 }
 

@@ -7,8 +7,8 @@ import (
 	"log"
 	"math"
 	"os"
-	"path/filepath"
 	"path"
+	"path/filepath"
 	"strconv"
 )
 
@@ -41,7 +41,7 @@ const (
 // Convenience function to be replaced by proper CLI command
 func doAllUndervolt() error {
 
-	MSRFiles, err := GetMsrFiles(-1)
+	MSRFiles, err := GetAllMsrFiles()
 	if err != nil {
 		return err
 	}
@@ -99,12 +99,12 @@ func (t *TemperatureTarget) setThrottleTemp(throttleTemp int64) error {
 	}
 
 	// we have a new value, now set it
-	MSRFiles, err := GetMsrFiles(t.cpu)
+	MSRFile, err := GetMsrFile(t.cpu)
 	if err != nil {
-		return fmt.Errorf("could not set temperature target for CPU %d: %s", t.cpu, err)
+		return fmt.Errorf("could not get MSR file for CPU %d: %s", t.cpu, err)
 	}
 
-	err = WriteMSRIntValue(MSRFiles[0], tempOffset, uint64(newOffset<<24))
+	err = WriteMSRIntValue(MSRFile, tempOffset, uint64(newOffset<<24))
 	if err != nil {
 		return fmt.Errorf("could not set new offset for CPU %d: %s", t.cpu, err)
 	} else {
@@ -131,12 +131,12 @@ func readTempTarget(cpu int) (TemperatureTarget, error) {
 	// Same thing with bits 23:16 for the temperature target (right shift 16)
 	var tempTargetMask int64 = 0x0000000000ffffff
 
-	MSRFiles, err := GetMsrFiles(cpu)
+	MSRFile, err := GetMsrFile(cpu)
 	if err != nil {
 		return tempTarget, err
 	}
 
-	buf, err := ReadMSRIntValue(MSRFiles[0], tempOffset)
+	buf, err := ReadMSRIntValue(MSRFile, tempOffset)
 	if err != nil {
 		return tempTarget, err
 	}
@@ -188,20 +188,41 @@ func isValidCPU(cpu int) bool {
 	return true
 }
 
+func GetAllMsrFiles() ([]string, error) {
+	var MSRFiles []string
+
+	cpus, err := GetAllCPUs()
+	if err != nil {
+		return MSRFiles, fmt.Errorf("could not get list of CPUS: %s", err)
+	}
+
+	for _, cpu := range cpus {
+		msrfile, err := GetMsrFile(cpu)
+		if err != nil {
+			// TODO
+			return MSRFiles, err
+		}
+
+		MSRFiles = append(MSRFiles, msrfile)
+	}
+
+	return MSRFiles, nil
+}
+
 // setVoltage sets the setPlane plane on cpu cpu to mVolts mV
 func setVoltage(setPlane VoltagePlane, mVolts int, cpu int) error {
 	if !isValidCPU(cpu) {
 		return fmt.Errorf("msr: invalid CPU number %d", cpu)
 	}
 
-	MSRFiles, err := GetMsrFiles(cpu)
+	MSRFile, err := GetMsrFile(cpu)
 	if err != nil {
 		return fmt.Errorf("msr: failed to set voltage on cpu %d: %s", cpu, err)
 	}
 
 	OffsetValue := calcUndervoltValue(setPlane, mVolts)
 	fmt.Printf("OffsetValue: %#x\n", OffsetValue)
-	err = WriteMSRIntValue(MSRFiles[0], underVoltOffset, OffsetValue)
+	err = WriteMSRIntValue(MSRFile, underVoltOffset, OffsetValue)
 	if err != nil {
 		fmt.Println("WriteMSRIntValue returned error: ", err)
 		return err
@@ -292,45 +313,19 @@ func WriteMSRIntValue(msr_file string, MSRRegAddr int64, value uint64) error {
 	return nil
 }
 
-// Return a slice of strings of all of the model specific register (msr) files associated
-// with the CPUs on the system. If -1 is given for cpu, GetMsrFiles returns a slice of all
-// CPUs' MSR files on the system In case of error, returns an empty slice.
-func GetMsrFiles(cpu int) ([]string, error) {
-	var msrFiles []string
-	var err error
+// Return a string with the path the model specific register (msr) files associated
+// with the given CPU.
+func GetMsrFile(cpu int) (string, error) {
 
-	if cpu == -1 {
-		allCpus, err := GetAllCPUs()
-		if err != nil {
-			return msrFiles, err
-		}
-
-		for _, cpu := range allCpus {
-			msrFile, err := GetMsrFiles(cpu)
-			if err != nil {
-				return msrFiles, err
-			}
-
-			msrFiles = append(msrFiles, msrFile[0])
-		}
-		return msrFiles, nil
-
-	} else {
-		if !isValidCPU(cpu) {
-			return msrFiles, fmt.Errorf("msr: invalid CPU number %d", cpu)
-		}
-
-		cpumsrFile := fmt.Sprintf("/dev/cpu/%d/msr", cpu)
-		// TODO(davidr) incorrect checking for whether stat succeeds
-		if _, err := os.Stat(cpumsrFile); os.IsNotExist(err) {
-			return msrFiles, err
-		}
-		msrFiles = append(msrFiles, cpumsrFile)
+	if !isValidCPU(cpu) {
+		return "", fmt.Errorf("msr: invalid CPU number %d", cpu)
 	}
 
-	if err != nil {
-		fmt.Println("Error getting MSR file(s): ", err)
-		return msrFiles, err
+	msrFile := fmt.Sprintf("/dev/cpu/%d/msr", cpu)
+	// TODO(davidr) incorrect checking for whether stat succeeds
+	if _, err := os.Stat(msrFile); os.IsNotExist(err) {
+		return msrFile, err
 	}
-	return msrFiles, nil
+
+	return msrFile, nil
 }
