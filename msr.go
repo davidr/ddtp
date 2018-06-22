@@ -12,8 +12,6 @@ import (
 	"strconv"
 )
 
-type VoltagePlane int
-
 const (
 	cpuCorePlane  = 0
 	gpuPlane      = 1
@@ -30,7 +28,6 @@ const (
 //
 // As best I can tell, the voltage values are just reverse-engineered from Intel's
 // tuning utilities.
-type MSROffset int64
 
 const (
 	underVoltOffset = 0x150
@@ -48,7 +45,7 @@ func doAllUndervolt() error {
 	}
 
 	// TODO(davidr) shame on you. fix this
-	for cpu, _ := range MSRFiles {
+	for cpu := range MSRFiles {
 		err := setVoltage(cpuCorePlane, -115, cpu)
 		if err != nil {
 			fmt.Println(err)
@@ -98,7 +95,7 @@ func readRAPLPowerLimit(cpu int) (RAPLPowerLimit, error) {
 		return rpl, err
 	}
 
-	rplUnitBitfield, err := ReadMSRIntValue(MSRFile, powerLimitUnits)
+	rplUnitBitfield, err := readMSRIntValue(MSRFile, powerLimitUnits)
 	if err != nil {
 		return rpl, err
 	}
@@ -106,7 +103,7 @@ func readRAPLPowerLimit(cpu int) (RAPLPowerLimit, error) {
 	// powerUnits given in W, timeUnits in s
 	powerUnits, timeUnits := getRAPLPowerUnits(rplUnitBitfield)
 
-	rplBitfield, err := ReadMSRIntValue(MSRFile, powerLimit)
+	rplBitfield, err := readMSRIntValue(MSRFile, powerLimit)
 	if err != nil {
 		return rpl, err
 	}
@@ -164,10 +161,9 @@ func (t *TemperatureTarget) setThrottleTemp(throttleTemp int64) error {
 	err = WriteMSRIntValue(MSRFile, tempOffset, uint64(newOffset<<24))
 	if err != nil {
 		return fmt.Errorf("could not set new offset for CPU %d: %s", t.cpu, err)
-	} else {
-		t.offset = newOffset
 	}
 
+	t.offset = newOffset
 	return nil
 }
 
@@ -194,7 +190,7 @@ func readTempTarget(cpu int) (TemperatureTarget, error) {
 		return tempTarget, err
 	}
 
-	buf, err := ReadMSRIntValue(MSRFile, tempOffset)
+	buf, err := readMSRIntValue(MSRFile, tempOffset)
 	if err != nil {
 		return tempTarget, err
 	}
@@ -218,8 +214,8 @@ func GetAllCPUs() ([]int, error) {
 	for _, cpuDir := range cpuDirs {
 		cpuDirBase := path.Base(cpuDir)
 
-		cpuId, _ := strconv.Atoi(cpuDirBase)
-		cpus = append(cpus, cpuId)
+		cpuID, _ := strconv.Atoi(cpuDirBase)
+		cpus = append(cpus, cpuID)
 	}
 
 	// Just a sanity check to make sure we found *something*
@@ -246,6 +242,8 @@ func isValidCPU(cpu int) bool {
 	return true
 }
 
+// GetAllMsrFiles returns an array containing the /dev/cpu/XX/msr files for all CPUs on the
+// system.
 func GetAllMsrFiles() ([]string, error) {
 	var MSRFiles []string
 
@@ -268,7 +266,7 @@ func GetAllMsrFiles() ([]string, error) {
 }
 
 // setVoltage sets the setPlane plane on cpu cpu to mVolts mV
-func setVoltage(setPlane VoltagePlane, mVolts int, cpu int) error {
+func setVoltage(setPlane int, mVolts int, cpu int) error {
 	if !isValidCPU(cpu) {
 		return fmt.Errorf("msr: invalid CPU number %d", cpu)
 	}
@@ -289,7 +287,7 @@ func setVoltage(setPlane VoltagePlane, mVolts int, cpu int) error {
 	return nil
 }
 
-func packOffset(offset uint32, plane VoltagePlane) uint64 {
+func packOffset(offset uint32, plane int) uint64 {
 	// I've deconstructed this calculation a little bit so I can remember how this magic
 	// int64 was created. This is... not intuitive to me.
 	planeBits := uint64(plane) << 40
@@ -303,7 +301,7 @@ func packOffset(offset uint32, plane VoltagePlane) uint64 {
 	return (1 << 63) | planeBits | writeBit | unknownBit | uint64(offset)
 }
 
-func calcUndervoltValue(plane VoltagePlane, offsetMv int) uint64 {
+func calcUndervoltValue(plane int, offsetMv int) uint64 {
 	// TODO(davidr) assert offset_mv < 0
 
 	offset := uint32(math.Round(float64(offsetMv) * 1.024))
@@ -313,13 +311,13 @@ func calcUndervoltValue(plane VoltagePlane, offsetMv int) uint64 {
 	return packOffset(offsetValue, plane)
 }
 
-func ReadMSRIntValue(msr_file string, MSRRegAddr int64) (int64, error) {
+func readMSRIntValue(msrFile string, MSRRegAddr int64) (int64, error) {
 	fmt.Printf("readmsr: %#x\n", MSRRegAddr)
 
 	var ReturnValue int64
 	bytesValue := make([]byte, 8)
 
-	file, err := os.OpenFile(msr_file, os.O_RDONLY, 0600)
+	file, err := os.OpenFile(msrFile, os.O_RDONLY, 0600)
 	if err != nil {
 		return ReturnValue, err
 	}
@@ -345,9 +343,9 @@ func ReadMSRIntValue(msr_file string, MSRRegAddr int64) (int64, error) {
 
 // WriteMSRIntValue packs a uint64 into a byte array and writes said array to the MSR file
 // msr_file (i.e. for one spcific CPU) at location MSRRegAddr
-func WriteMSRIntValue(msr_file string, MSRRegAddr int64, value uint64) error {
+func WriteMSRIntValue(msrFile string, MSRRegAddr int64, value uint64) error {
 	fmt.Printf("writemsr: %#x\tval: %#x\n", MSRRegAddr, value)
-	file, err := os.OpenFile(msr_file, os.O_WRONLY, 0600)
+	file, err := os.OpenFile(msrFile, os.O_WRONLY, 0600)
 	if err != nil {
 		return err
 	}
@@ -371,8 +369,8 @@ func WriteMSRIntValue(msr_file string, MSRRegAddr int64, value uint64) error {
 	return nil
 }
 
-// Return a string with the path the model specific register (msr) files associated
-// with the given CPU.
+// GetMsrFile returns a string with the path the model specific register (msr) files associated
+// with the given CPU. (i.e. "/dev/cpu/0/msr")
 func GetMsrFile(cpu int) (string, error) {
 
 	if !isValidCPU(cpu) {
