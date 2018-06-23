@@ -7,9 +7,6 @@ import (
 	"log"
 	"math"
 	"os"
-	"path"
-	"path/filepath"
-	"strconv"
 )
 
 const (
@@ -167,8 +164,8 @@ func (t *TemperatureTarget) setThrottleTemp(throttleTemp int64) error {
 	return nil
 }
 
-// readTempTarget returns a TemperatureTarget struct for the cpu given in cpu
-func readTempTarget(cpu int) (TemperatureTarget, error) {
+// ReadTempTarget returns a TemperatureTarget struct for the cpu given in cpu
+func ReadTempTarget(cpu int) (TemperatureTarget, error) {
 	tempTarget := TemperatureTarget{cpu: cpu}
 
 	// Temp target offset calculation:
@@ -179,11 +176,11 @@ func readTempTarget(cpu int) (TemperatureTarget, error) {
 	// 63    56 55    48 47    40 39    32 31    24 23    16 15     8 7      0
 	// 00000000 00000000 00000000 00000000 00010100 01100100 00000000 00000000
 	// mask: 00       00       00       00       7F       FF       FF       FF
-	var tempOffsetMask int64 = 0x000000007fffffff
+	var tempOffsetMask int64 = 0x7fffffff
 	// TODO(davidr) I don't think 7 is the right mask there
 
 	// Same thing with bits 23:16 for the temperature target (right shift 16)
-	var tempTargetMask int64 = 0x0000000000ffffff
+	var tempTargetMask int64 = 0xffffff
 
 	MSRFile, err := GetMsrFile(cpu)
 	if err != nil {
@@ -198,48 +195,6 @@ func readTempTarget(cpu int) (TemperatureTarget, error) {
 	tempTarget.offset = (buf & tempOffsetMask) >> 24
 	tempTarget.target = (buf & tempTargetMask) >> 16
 	return tempTarget, nil
-}
-
-// GetAllCPUs returns a list of integers corresponding to all CPUs on the system (e.g. on
-// a 4-core system, GetAllCPUs will return [0, 1, 2, 3]. This listing is obtained by globbing
-// /dev/cpu/[0-9]*
-func GetAllCPUs() ([]int, error) {
-	var cpus []int
-
-	cpuDirs, err := filepath.Glob("/dev/cpu/[0-9]*")
-	if err != nil {
-		return cpus, err
-	}
-
-	for _, cpuDir := range cpuDirs {
-		cpuDirBase := path.Base(cpuDir)
-
-		cpuID, _ := strconv.Atoi(cpuDirBase)
-		cpus = append(cpus, cpuID)
-	}
-
-	// Just a sanity check to make sure we found *something*
-	if len(cpus) == 0 {
-		return cpus, fmt.Errorf("found no CPUs")
-	}
-
-	return cpus, nil
-}
-
-func isValidCPU(cpu int) bool {
-
-	// CPU must be a nonnegative integer
-	if cpu < 0 {
-		return false
-	}
-
-	// Does this CPU have a directory under /dev/cpu?
-	cpuDir := fmt.Sprintf("/dev/cpu/%d", cpu)
-	if _, err := os.Stat(cpuDir); os.IsNotExist(err) {
-		return false
-	}
-
-	return true
 }
 
 // GetAllMsrFiles returns an array containing the /dev/cpu/XX/msr files for all CPUs on the
