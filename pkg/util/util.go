@@ -1,4 +1,4 @@
-package main
+package util
 
 import (
 	"fmt"
@@ -34,7 +34,7 @@ func GetAllCPUs() ([]int, error) {
 	return cpus, nil
 }
 
-func isValidCPU(cpu int) bool {
+func IsValidCPU(cpu int) bool {
 
 	// CPU must be a nonnegative integer
 	if cpu < 0 {
