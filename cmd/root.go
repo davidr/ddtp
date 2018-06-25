@@ -29,9 +29,9 @@ func Execute() {
 
 func init() {
 	// config defaults
-	cpuDefault := -1
+	cpuDefault := 0
 
-	rootCmd.PersistentFlags().IntVarP(&cpuFlag, "cpu", "c", cpuDefault, "CPU Number (Default: ALL CPUs)")
+	rootCmd.PersistentFlags().IntVarP(&cpuFlag, "cpu", "c", cpuDefault, "CPU Number (Default: 0)")
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
 
 }

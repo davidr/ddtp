@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-// tempCmd represents the temp command
 var tempCmd = &cobra.Command{
 	Use:   "temp",
 	Short: "Package Temperature Target Interface",
@@ -28,6 +27,7 @@ var tempListCmd = &cobra.Command{
 	Short: "List throttle temperature value(s)",
 	Args:  cobra.ExactArgs(0),
 	Run: func(cmd *cobra.Command, args []string) {
+		// TODO(davidr) - check for error
 		listTemp(cpuFlag)
 	},
 }
@@ -38,7 +38,7 @@ var tempSetCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		// Read temperature into int64 to process change
-		throttleTemp, err := strconv.ParseInt(args[0], 10, 64)
+		throttleTemp, err := strconv.Atoi(args[0])
 		if err != nil {
 			log.Fatal("Could not parse argument into temperature: ", err)
 		}
@@ -53,7 +53,7 @@ func init() {
 	rootCmd.AddCommand(tempCmd)
 }
 
-func setTemp(cpu int, throttleTemp int64) error {
+func setTemp(cpu int, throttleTemp int) error {
 	if cpu == -1 {
 		return setAllTemps(throttleTemp)
 	}
@@ -73,7 +73,7 @@ func setTemp(cpu int, throttleTemp int64) error {
 	return nil
 }
 
-func setAllTemps(throttleTemp int64) error {
+func setAllTemps(throttleTemp int) error {
 	// Set a counter for the number of throttle temps we've changed so that we know if we've
 	// left the cpu temperature limits in an inconsistent state because we've died halfway through
 	tempChangeCounter := 0

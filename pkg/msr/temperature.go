@@ -5,21 +5,21 @@ import "fmt"
 // TemperatureTarget is a struct corresponding to the TEMPERATURE_TARGET MSR for
 // an individual CPU
 type TemperatureTarget struct {
-	cpu    int   // CPU number
-	target int64 // default thermal throttling activation temperature in degrees C
-	offset int64 // offset from the default in degrees C at which to start throttling
+	cpu    int // CPU number
+	target int // default thermal throttling activation temperature in degrees C
+	offset int // offset from the default in degrees C at which to start throttling
 }
 
 // GetThrottleTemp returns the throttle temperature calculated from the TemperatureTarget
 // default and offset data
-func (t *TemperatureTarget) GetThrottleTemp() int64 {
+func (t *TemperatureTarget) GetThrottleTemp() int {
 	return t.target - t.offset
 }
 
 // SetThrottleTemp sets the throttle temperature for the CPU to temp by way of an offset
 // from TemperatureTarget.target (e.g. if t.target == 100, then setThrottleTemp(90)
 // will set t.offset to 10)
-func (t *TemperatureTarget) SetThrottleTemp(throttleTemp int64) error {
+func (t *TemperatureTarget) SetThrottleTemp(throttleTemp int) error {
 	// I think it's unlikely we'd ever want to set the offset higher than the default
 	if throttleTemp > t.target {
 		return fmt.Errorf("CPU throttling temperature cannot be higher than %d", t.target)
@@ -57,11 +57,11 @@ func GetTempTarget(cpu int) (TemperatureTarget, error) {
 	// 63    56 55    48 47    40 39    32 31    24 23    16 15     8 7      0
 	// 00000000 00000000 00000000 00000000 00010100 01100100 00000000 00000000
 	// mask: 00       00       00       00       7F       FF       FF       FF
-	var tempOffsetMask int64 = 0x7fffffff
+	var tempOffsetMask uint64 = 0x7fffffff
 	// TODO(davidr) I don't think 7 is the right mask there
 
 	// Same thing with bits 23:16 for the temperature target (right shift 16)
-	var tempTargetMask int64 = 0xffffff
+	var tempTargetMask uint64 = 0xffffff
 
 	MSRFile, err := GetMsrFile(cpu)
 	if err != nil {
@@ -73,7 +73,7 @@ func GetTempTarget(cpu int) (TemperatureTarget, error) {
 		return tempTarget, err
 	}
 
-	tempTarget.offset = (buf & tempOffsetMask) >> 24
-	tempTarget.target = (buf & tempTargetMask) >> 16
+	tempTarget.offset = int((buf & tempOffsetMask) >> 24)
+	tempTarget.target = int((buf & tempTargetMask) >> 16)
 	return tempTarget, nil
 }
