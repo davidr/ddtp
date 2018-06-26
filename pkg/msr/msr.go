@@ -4,11 +4,11 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"log"
 	"math"
 	"os"
 
 	"github.com/davidr/ddtp/pkg/util"
+	log "github.com/sirupsen/logrus"
 )
 
 // VoltagePlanes is a simple map from a logical voltage plane name to its integer
@@ -203,8 +203,6 @@ func packOffset(offset uint32, plane int, write bool) uint64 {
 }
 
 func calcUndervoltValue(plane int, offsetMv int) uint64 {
-	// TODO(davidr) assert offset_mv < 0
-
 	offset := uint32(math.Round(float64(offsetMv) * 1.024))
 
 	// The actual value is only an 11 bit number, so we left-shift by 21
@@ -213,6 +211,7 @@ func calcUndervoltValue(plane int, offsetMv int) uint64 {
 }
 
 func readMSRIntValue(msrFile string, MSRRegAddr int64) (uint64, error) {
+	log.Infof("reading value from %s:%d", msrFile, MSRRegAddr)
 	var ReturnValue uint64
 	bytesValue := make([]byte, 8)
 
@@ -237,12 +236,14 @@ func readMSRIntValue(msrFile string, MSRRegAddr int64) (uint64, error) {
 		return ReturnValue, err
 	}
 
+	log.Debugf("read 0x%016x", ReturnValue)
 	return ReturnValue, err
 }
 
 // WriteMSRIntValue packs a uint64 into a byte array and writes said array to the MSR file
 // msr_file (i.e. for one spcific CPU) at location MSRRegAddr
 func WriteMSRIntValue(msrFile string, MSRRegAddr int64, value uint64) error {
+	log.Debugf("writing 0x%016x to %s:%x", value, msrFile, MSRRegAddr)
 	file, err := os.OpenFile(msrFile, os.O_WRONLY, 0600)
 	if err != nil {
 		return err
@@ -272,7 +273,6 @@ func WriteMSRIntValue(msrFile string, MSRRegAddr int64, value uint64) error {
 // GetMsrFile returns a string with the path the model specific register (msr) files associated
 // with the given CPU. (i.e. "/dev/cpu/0/msr")
 func GetMsrFile(cpu int) (string, error) {
-
 	if !util.IsValidCPU(cpu) {
 		return "", fmt.Errorf("msr: invalid CPU number %d", cpu)
 	}
@@ -283,5 +283,6 @@ func GetMsrFile(cpu int) (string, error) {
 		return msrFile, err
 	}
 
+	log.Debugf("returning msr file %s for CPU %d", msrFile, cpu)
 	return msrFile, nil
 }

@@ -4,18 +4,33 @@ import (
 	"fmt"
 	"os"
 
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
 var (
 	cpuFlag     int
 	verboseFlag bool
+	debugFlag   bool
 )
 
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "ddtp",
 	Short: "utilities for power management on laptops",
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		log.SetOutput(os.Stdout)
+
+		if debugFlag {
+			log.SetLevel(log.DebugLevel)
+			log.Debug("debug logging enabled")
+		} else if verboseFlag {
+			log.SetLevel(log.InfoLevel)
+			log.Info("verbose logging enabled")
+		} else {
+			log.SetLevel(log.WarnLevel)
+		}
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -33,5 +48,5 @@ func init() {
 
 	rootCmd.PersistentFlags().IntVarP(&cpuFlag, "cpu", "c", cpuDefault, "CPU Number (Default: 0)")
 	rootCmd.PersistentFlags().BoolVarP(&verboseFlag, "verbose", "v", false, "Verbose output")
-
+	rootCmd.PersistentFlags().BoolVarP(&debugFlag, "debug", "d", false, "Debug output")
 }

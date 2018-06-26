@@ -2,13 +2,13 @@ package cmd
 
 import (
 	"fmt"
-	"log"
 	"os"
 	"sort"
 	"strconv"
 
 	"github.com/davidr/ddtp/pkg/msr"
 	"github.com/olekukonko/tablewriter"
+	log "github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -28,11 +28,13 @@ var voltListCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		// with no arguments, get the voltage offset for all planes and display in a table
 		if len(args) == 0 {
+			log.Info("displaying all voltage planes")
 			listAllPlaneVoltage()
 			return
 		}
 
 		plane, ok := msr.VoltagePlanes[args[0]]
+		log.Infof("requesting info for plane %s", args[0])
 		if !ok {
 			log.Fatalf("Invalid plane '%s'", args[0])
 		}
@@ -93,7 +95,7 @@ func getPlaneListSortedByPlane() []string {
 
 func listAllPlaneVoltage() error {
 	table := tablewriter.NewWriter(os.Stdout)
-	table.SetHeader([]string{"Voltage Plane", "Offset Value in millivolts"})
+	table.SetHeader([]string{"plane", "offset in millivolts"})
 	table.SetBorder(false)
 
 	planeNames := getPlaneListSortedByPlane()
