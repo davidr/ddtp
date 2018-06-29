@@ -40,7 +40,6 @@ var voltListCmd = &cobra.Command{
 		}
 
 		listPlaneVoltage(plane)
-
 	},
 }
 
