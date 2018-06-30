@@ -15,21 +15,6 @@ var VoltagePlanes = map[string]int{
 	"analogio": 4,
 }
 
-// https://software.intel.com/sites/default/files/managed/22/0d/335592-sdm-vol-4.pdf
-//
-// I cannot for the life of me find any docs from Intel on the voltage MSR. I must be
-// searching for the wrong thing, but nothing seems to mention register address 0x150...
-// ANYWHERE.
-//
-// As best I can tell, the voltage values are just reverse-engineered from Intel's
-// tuning utilities.
-
-const (
-	underVoltOffset = 0x150
-	tempOffset      = 0x1a2 // b29:24 Temperature Target
-	powerLimitUnits = 0x606 // Definition of units for 0x610
-	powerLimit      = 0x610 // PKG RAPL Power Limit Control (R/W)
-)
 
 // SetVoltage sets the voltagePlane plane on cpu cpu to mVolts mV
 func SetVoltage(voltagePlane int, mVolts int, cpu int) error {
