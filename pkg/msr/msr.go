@@ -52,7 +52,7 @@ func GetAllMsrFiles() ([]string, error) {
 
 
 func readMSRIntValue(msrFile string, MSRRegAddr int64) (uint64, error) {
-	log.Infof("reading value from %s:%d", msrFile, MSRRegAddr)
+	log.Infof("reading value from %s:0x%x", msrFile, MSRRegAddr)
 	var ReturnValue uint64
 	bytesValue := make([]byte, 8)
 
@@ -84,7 +84,7 @@ func readMSRIntValue(msrFile string, MSRRegAddr int64) (uint64, error) {
 // WriteMSRIntValue packs a uint64 into a byte array and writes said array to the MSR file
 // msr_file (i.e. for one spcific CPU) at location MSRRegAddr
 func WriteMSRIntValue(msrFile string, MSRRegAddr int64, value uint64) error {
-	log.Debugf("writing 0x%016x to %s:%x", value, msrFile, MSRRegAddr)
+	log.Debugf("writing 0x%016x to %s:0x%x", value, msrFile, MSRRegAddr)
 	file, err := os.OpenFile(msrFile, os.O_WRONLY, 0600)
 	if err != nil {
 		return err
